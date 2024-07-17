@@ -7,7 +7,7 @@
 *.dll
 *.so
 *.dylib
-
+mapreduce
 # Test binary, build with `go test -c`
 *.test
 
