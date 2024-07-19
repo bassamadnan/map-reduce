@@ -24,3 +24,17 @@ const (
 	REDUCE_TASKS   = 2
 	RETRY_LIMIT    = 3
 )
+
+type JobConfig struct {
+	ChunkSize     int
+	MaxWorkers    int
+	MaxTasks      int
+	WorkerTimeout int
+	MasterPort    int
+	MapTasks      int
+	ReduceTasks   int
+	RetryLimit    int
+	InputDir      string
+	TempDir       string
+	OutputDir     string
+}
