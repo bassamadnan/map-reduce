@@ -66,6 +66,7 @@ type Master struct {
 	State       JobState
 	MapTasks    []MapTask
 	ReduceTasks []ReduceTask
+	Workers     []Worker
 }
 
 func SpawnMaster(job *Job, config JobConfig) *Master {
@@ -77,8 +78,15 @@ func SpawnMaster(job *Job, config JobConfig) *Master {
 			PendingMapTasks:    0,
 			PendingReduceTasks: config.ReduceTasks,
 		},
+		Workers: make([]Worker, config.MaxWorkers),
 	}
 
+	for i := 0; i < config.MaxWorkers; i++ {
+		master.Workers[i] = Worker{
+			ID:     i,
+			Status: int(WorkerIdle),
+		}
+	}
 	content, err := utils.ReadInput(job.InputFile)
 	if err != nil {
 		return nil
@@ -110,20 +118,21 @@ func SpawnMaster(job *Job, config JobConfig) *Master {
 	return master
 }
 
-func (m *Master) AssignTasks() Task {
+func (m *Master) AssignTask() *Task {
+	// check for map tasks first
 	for i := range m.MapTasks {
-		if m.MapTasks[i].Status.Completed {
-			return &m.MapTasks[i]
+		if !(m.MapTasks[i].Status.Completed) {
+			var task Task = &m.MapTasks[i]
+			return &task
 		}
 	}
+	// if all map tasks are done (add another check later)
+	// check reduce ReduceTasks
 	for i := range m.ReduceTasks {
-		if m.ReduceTasks[i].Status.Completed {
-			return &m.ReduceTasks[i]
+		if !(m.ReduceTasks[i].Status.Completed) {
+			var task Task = &m.ReduceTasks[i]
+			return &task
 		}
 	}
 	return nil
-}
-
-func updateTaskStatus(t *Task, s int) {
-
 }
