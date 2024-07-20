@@ -1,6 +1,9 @@
-package internal
+package models
 
-import "time"
+import (
+	utils "map-reduce/pkg"
+	"time"
+)
 
 type MapFunc func(key, value string) []KeyValue
 type ReduceFunc func(key string, values []string) string
@@ -20,7 +23,7 @@ type TaskStatus struct {
 
 type MapTask struct {
 	ID     int
-	Inputs map[string][]string
+	Input  string
 	Status TaskStatus
 }
 
@@ -33,8 +36,8 @@ type ReduceTask struct {
 type Job struct {
 	MapFunc     MapFunc
 	ReduceFunc  ReduceFunc
-	InputPath   string
-	OutputPath  string
+	InputFile   string
+	OutputFile  string
 	NumMappers  int
 	NumReducers int
 }
@@ -54,9 +57,7 @@ type JobConfig struct {
 	MapTasks      int
 	ReduceTasks   int
 	RetryLimit    int
-	InputDir      string
-	TempDir       string
-	OutputDir     string
+	TempDir       string // remove ?
 }
 
 type Master struct {
@@ -73,22 +74,30 @@ func SpawnMaster(job *Job, config JobConfig) *Master {
 		Config: config,
 		State: JobState{
 			AvailableWorkers:   config.MaxWorkers,
-			PendingMapTasks:    config.MapTasks,
+			PendingMapTasks:    0,
 			PendingReduceTasks: config.ReduceTasks,
 		},
 	}
 
-	for i := 0; i < config.MapTasks; i++ {
+	content, err := utils.ReadInput(job.InputFile)
+	if err != nil {
+		return nil
+	}
+	chunks := utils.SplitInput(content)
+
+	for i, chunk := range chunks {
 		master.MapTasks = append(master.MapTasks, MapTask{
-			ID: i,
+			ID:    i,
+			Input: chunk,
 			Status: TaskStatus{
 				Worker:    -1,
 				Completed: false,
 			},
 		})
 	}
+	master.State.PendingMapTasks = len(master.MapTasks)
 
-	for i := 0; i < config.ReduceTasks; i++ {
+	for i := 0; i < job.NumReducers; i++ {
 		master.ReduceTasks = append(master.ReduceTasks, ReduceTask{
 			ID: i,
 			Status: TaskStatus{
@@ -99,4 +108,22 @@ func SpawnMaster(job *Job, config JobConfig) *Master {
 	}
 
 	return master
+}
+
+func (m *Master) AssignTasks() Task {
+	for i := range m.MapTasks {
+		if m.MapTasks[i].Status.Completed {
+			return &m.MapTasks[i]
+		}
+	}
+	for i := range m.ReduceTasks {
+		if m.ReduceTasks[i].Status.Completed {
+			return &m.ReduceTasks[i]
+		}
+	}
+	return nil
+}
+
+func updateTaskStatus(t *Task, s int) {
+
 }
