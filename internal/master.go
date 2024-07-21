@@ -1,6 +1,7 @@
-package models
+package internal
 
 import (
+	"fmt"
 	utils "map-reduce/pkg"
 	"time"
 )
@@ -30,7 +31,7 @@ type Task struct {
 	Inputs    map[string][]string // For ReduceTask: intermediate data, for MapTask: empty
 	StartTime time.Time
 	EndTime   time.Time
-	LastPing  time.Time
+	LastPing  time.Time // remove?
 }
 
 type WorkerStatus int
@@ -39,13 +40,6 @@ const (
 	WorkerIdle WorkerStatus = iota
 	WorkerBusy
 )
-
-type Worker struct {
-	ID            int
-	Status        WorkerStatus
-	TaskChannel   chan *Task
-	ResultChannel chan TaskResult
-}
 
 type TaskResult struct {
 	TaskID int
@@ -116,6 +110,7 @@ func NewMaster(job *Job, config JobConfig) *Master {
 	if err != nil {
 		return nil
 	}
+	// TODO: split chunks based on workers/map tasks? (paper says user defined)
 	chunks := utils.SplitInput(content)
 
 	for i, chunk := range chunks {
@@ -150,9 +145,11 @@ func (m *Master) getNextTask() *Task {
 }
 
 func (m *Master) assignTasks() {
+	// find the first idel worker and assign it first incomplete task
 	for i := range m.Workers {
 		worker := &m.Workers[i]
 		if worker.Status == WorkerIdle {
+			// find incomplete task
 			task := m.getNextTask()
 			if task != nil {
 				task.Status = TaskInProgress
@@ -168,4 +165,50 @@ func (m *Master) assignTasks() {
 			}
 		}
 	}
+}
+
+func (m *Master) StartWorkers() {
+	for i := range m.Workers {
+		go m.Workers[i].Run(m.Config)
+	}
+}
+
+func (m *Master) RunMapPhase() {
+
+	// 1. start Workers
+	// 2. assign Tasks
+	// 3. collect results (intermediate, to be passed to reduce phase)
+
+	m.StartWorkers()
+	for m.State.PendingMapTasks > 0 {
+		m.assignTasks()
+		select {
+		case result := <-m.ResultChannel:
+			if result.Error != nil {
+				fmt.Printf("task fail --> %v\n", result.TaskID)
+			} else {
+				for i := range m.Tasks {
+					if m.Tasks[i].ID == result.TaskID {
+						m.Tasks[i].Status = TaskCompleted
+						m.Tasks[i].EndTime = time.Now()
+						break
+					}
+				}
+			}
+		}
+	}
+	fmt.Println("REACHED HERE ")
+	// run till tasks are complete
+	for !m.mapTasksCompleted() {
+		time.Sleep(100 * time.Millisecond) // slight delay
+	}
+}
+
+func (m *Master) mapTasksCompleted() bool {
+	for i := range m.Tasks {
+		if m.Tasks[i].Type == MapTask && m.Tasks[i].Status != TaskCompleted {
+			return false
+		}
+	}
+	return true
 }
