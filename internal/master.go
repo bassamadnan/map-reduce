@@ -142,6 +142,7 @@ func (m *Master) RunMapPhase() {
 	// 	fmt.Printf("worker status: -> %v\n", worker.Status)
 	// }
 	fmt.Println("maphase function exit")
+	m.mergeFiles()
 }
 
 func (m *Master) mapTasksCompleted() bool {
