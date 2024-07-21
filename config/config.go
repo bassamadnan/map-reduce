@@ -16,7 +16,7 @@ var (
 
 const (
 	CHUNK_SIZE     = 1024 * 1024
-	MAX_WORKERS    = 10
+	MAX_WORKERS    = 3
 	MAX_TASKS      = 10
 	WORKER_TIMEOUT = 10
 	MASTER_PORT    = 8080

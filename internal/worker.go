@@ -43,7 +43,7 @@ func Map(_, value string) []KeyValue {
 var globalFileCounter int32 = 0 // wX.txt for saving now
 
 func (w *Worker) WorkerMapTask(task *Task, config JobConfig) TaskResult {
-	fmt.Printf("starting -> worker id: %v, taskid: %v\n", w.ID, task.ID)
+	fmt.Printf("starting -> worker id: %v, taskid: %v, firstchar: %v, lastchar: %v, sz: %v\n", w.ID, task.ID, string(task.Input[0]), string(task.Input[len(task.Input)-1]), len(task.Input))
 	mappedData := Map("", task.Input)
 	fmt.Printf("ending -> worker id: %v, taskid: %v\n", w.ID, task.ID)
 	fileCounter := atomic.AddInt32(&globalFileCounter, 1)

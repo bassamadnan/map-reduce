@@ -6,83 +6,6 @@ import (
 	"time"
 )
 
-type TaskType int
-
-const (
-	MapTask TaskType = iota
-	ReduceTask
-)
-
-type TaskStatus int
-
-const (
-	TaskPending TaskStatus = iota
-	TaskInProgress
-	TaskCompleted
-	TaskFailed
-)
-
-type Task struct {
-	ID        int
-	Type      TaskType
-	Status    TaskStatus
-	Worker    int
-	Input     string              // For MapTask: input chunk, for ReduceTask: empty
-	Inputs    map[string][]string // For ReduceTask: intermediate data, for MapTask: empty
-	StartTime time.Time
-	EndTime   time.Time
-	LastPing  time.Time // remove?
-}
-
-type WorkerStatus int
-
-const (
-	WorkerIdle WorkerStatus = iota
-	WorkerBusy
-)
-
-type TaskResult struct {
-	TaskID int
-	Result interface{}
-	Error  error
-}
-
-type Job struct {
-	MapFunc     MapFunc
-	ReduceFunc  ReduceFunc
-	InputFile   string
-	OutputFile  string
-	NumMappers  int
-	NumReducers int
-}
-
-type JobState struct {
-	AvailableWorkers   int
-	PendingMapTasks    int
-	PendingReduceTasks int
-}
-
-type JobConfig struct {
-	ChunkSize     int
-	MaxWorkers    int
-	MaxTasks      int
-	WorkerTimeout int
-	MasterPort    int
-	MapTasks      int
-	ReduceTasks   int
-	RetryLimit    int
-	TempDir       string
-}
-
-type Master struct {
-	Job           *Job
-	Config        JobConfig
-	State         JobState
-	Tasks         []Task
-	Workers       []Worker
-	ResultChannel chan TaskResult
-}
-
 func NewMaster(job *Job, config JobConfig) *Master {
 	master := &Master{
 		Job:    job,
@@ -123,6 +46,7 @@ func NewMaster(job *Job, config JobConfig) *Master {
 			Worker: -1,
 			Input:  chunk,
 		})
+		fmt.Printf("start %v end  %v size %v\n", string(chunk[0]), string(chunk[len(chunk)-1]), len(chunk))
 	}
 	master.State.PendingMapTasks = len(chunks)
 
@@ -162,7 +86,7 @@ func (m *Master) assignTasks() {
 				worker.Status = WorkerBusy
 				if task.Type == MapTask {
 					m.State.PendingMapTasks--
-					fmt.Println(m.State.PendingMapTasks)
+					// fmt.Println(m.State.PendingMapTasks)
 				} else {
 					m.State.PendingReduceTasks--
 				}
@@ -184,10 +108,7 @@ func (m *Master) RunMapPhase() {
 	// 3. collect results (intermediate, to be passed to reduce phase)
 
 	m.StartWorkers()
-	completedTasks := 0
-	totalMapTasks := m.State.PendingMapTasks
-
-	for completedTasks <= totalMapTasks {
+	for !m.allMapTasksCompleted() {
 		m.assignTasks()
 		select {
 		case result := <-m.ResultChannel:
@@ -200,22 +121,37 @@ func (m *Master) RunMapPhase() {
 						m.Tasks[i].Status = TaskCompleted
 						m.Tasks[i].EndTime = time.Now()
 						m.Workers[m.Tasks[i].Worker].Status = WorkerIdle // reset worker status to idle
-						completedTasks++
+						fmt.Printf("completed task %v\n", m.Tasks[i].ID)
 						break
 					}
 				}
 			}
-		case <-time.After(100 * time.Millisecond): // timeout
+		case <-time.After(10000 * time.Millisecond): // timeout
+			fmt.Println("Time out")
 
 		}
 	}
 
+	// for i, task := range m.Tasks {
+	// 	if task.Status != TaskCompleted {
+	// 		fmt.Printf("task id: %v, i:%v, status:%v\n", task.ID, i, task.Status)
+	// 	}
+	// }
 	fmt.Println("maphase function exit")
 }
 
 func (m *Master) mapTasksCompleted() bool {
 	for i := range m.Tasks {
 		if m.Tasks[i].Type == MapTask && m.Tasks[i].Status != TaskCompleted {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Master) allMapTasksCompleted() bool {
+	for _, task := range m.Tasks {
+		if task.Type == MapTask && task.Status != TaskCompleted {
 			return false
 		}
 	}
