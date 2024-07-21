@@ -93,8 +93,8 @@ func NewMaster(job *Job, config JobConfig) *Master {
 			PendingReduceTasks: config.ReduceTasks,
 		},
 		Workers:       make([]Worker, config.MaxWorkers),
-		Tasks:         make([]Task, 0, config.MapTasks+config.ReduceTasks),
 		ResultChannel: make(chan TaskResult, config.MaxWorkers),
+		Tasks:         make([]Task, 0, config.MapTasks+config.ReduceTasks),
 	}
 
 	for i := 0; i < config.MaxWorkers; i++ {
@@ -110,9 +110,11 @@ func NewMaster(job *Job, config JobConfig) *Master {
 	if err != nil {
 		return nil
 	}
+
 	// TODO: split chunks based on workers/map tasks? (paper says user defined)
 	chunks := utils.SplitInput(content)
 
+	// create map tasks
 	for i, chunk := range chunks {
 		master.Tasks = append(master.Tasks, Task{
 			ID:     i,
@@ -122,7 +124,7 @@ func NewMaster(job *Job, config JobConfig) *Master {
 			Input:  chunk,
 		})
 	}
-	master.State.PendingMapTasks = len(master.Tasks)
+	master.State.PendingMapTasks = len(chunks)
 
 	for i := 0; i < job.NumReducers; i++ {
 		master.Tasks = append(master.Tasks, Task{
@@ -182,28 +184,33 @@ func (m *Master) RunMapPhase() {
 	// 3. collect results (intermediate, to be passed to reduce phase)
 
 	m.StartWorkers()
-	for m.State.PendingMapTasks > 0 {
+	completedTasks := 0
+	totalMapTasks := m.State.PendingMapTasks
+
+	for completedTasks <= totalMapTasks {
 		m.assignTasks()
 		select {
 		case result := <-m.ResultChannel:
 			if result.Error != nil {
 				fmt.Printf("task fail --> %v\n", result.TaskID)
+				m.State.PendingMapTasks++
 			} else {
 				for i := range m.Tasks {
 					if m.Tasks[i].ID == result.TaskID {
 						m.Tasks[i].Status = TaskCompleted
 						m.Tasks[i].EndTime = time.Now()
+						m.Workers[m.Tasks[i].Worker].Status = WorkerIdle // reset worker status to idle
+						completedTasks++
 						break
 					}
 				}
 			}
+		case <-time.After(100 * time.Millisecond): // timeout
+
 		}
 	}
-	fmt.Println("REACHED HERE ")
-	// run till tasks are complete
-	for !m.mapTasksCompleted() {
-		time.Sleep(100 * time.Millisecond) // slight delay
-	}
+
+	fmt.Println("maphase function exit")
 }
 
 func (m *Master) mapTasksCompleted() bool {

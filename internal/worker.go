@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 )
 
 type MapFunc func(key, value string) []KeyValue          // map (k1,v1) → list(k2,v2)
@@ -39,12 +40,14 @@ func Map(_, value string) []KeyValue {
 	return result
 }
 
+var globalFileCounter int32 = 0 // wX.txt for saving now
+
 func (w *Worker) WorkerMapTask(task *Task, config JobConfig) TaskResult {
 	fmt.Printf("starting -> worker id: %v, taskid: %v\n", w.ID, task.ID)
 	mappedData := Map("", task.Input)
 	fmt.Printf("ending -> worker id: %v, taskid: %v\n", w.ID, task.ID)
-	// add intermediate results to temp directory
-	outputFile := filepath.Join(config.TempDir, fmt.Sprintf("w%d.txt", w.ID))
+	fileCounter := atomic.AddInt32(&globalFileCounter, 1)
+	outputFile := filepath.Join(config.TempDir, fmt.Sprintf("w%d.txt", fileCounter))
 	file, err := os.Create(outputFile)
 	if err != nil {
 		return TaskResult{TaskID: task.ID, Error: err}
@@ -72,4 +75,5 @@ func (w *Worker) Run(config JobConfig) {
 		}
 		w.ResultChannel <- result
 	}
+	fmt.Printf("Worker exitting %v\n", w.ID)
 }
