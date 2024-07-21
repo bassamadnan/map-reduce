@@ -49,16 +49,6 @@ func NewMaster(job *Job, config JobConfig) *Master {
 		fmt.Printf("start %v end  %v size %v\n", string(chunk[0]), string(chunk[len(chunk)-1]), len(chunk))
 	}
 	master.State.PendingMapTasks = len(chunks)
-
-	for i := 0; i < job.NumReducers; i++ {
-		master.Tasks = append(master.Tasks, Task{
-			ID:     len(chunks) + i,
-			Type:   ReduceTask,
-			Status: TaskPending,
-			Worker: -1,
-		})
-	}
-
 	return master
 }
 
@@ -141,8 +131,60 @@ func (m *Master) RunMapPhase() {
 	// for _, worker := range m.Workers {
 	// 	fmt.Printf("worker status: -> %v\n", worker.Status)
 	// }
+	// reset Workers
+	for i := range m.Workers {
+		close(m.Workers[i].TaskChannel)
+		m.Workers[i] = Worker{
+			ID:            i,
+			Status:        WorkerIdle,
+			TaskChannel:   make(chan *Task),
+			ResultChannel: m.ResultChannel,
+		}
+	}
+
 	fmt.Println("maphase function exit")
-	m.mergeFiles()
+	aggregateData, err := m.mergeFiles()
+	if err != nil {
+		fmt.Println("error aggregating data: ", err)
+	}
+
+	m.createReduceTasks(aggregateData)
+
+}
+
+func (m *Master) createReduceTasks(aggregateData map[string][]int) {
+	keys := make([]string, 0, len(aggregateData))
+	for k := range aggregateData {
+		keys = append(keys, k)
+	}
+	fmt.Println(keys)
+	taskLimit := 5 //5 keys per task for reduce func TOOD : set this as config
+	numReduceTasks := (len(keys) + taskLimit - 1) / taskLimit
+	m.Tasks = make([]Task, numReduceTasks)
+	for i := 0; i < numReduceTasks; i++ {
+		start := i * taskLimit
+		end := min(len(keys), (i+1)*taskLimit)
+		taskKeys := keys[start:end]
+		taskData := make(map[string][]int)
+		for _, key := range taskKeys {
+			taskData[key] = aggregateData[key]
+		}
+		m.Tasks[i] = Task{
+			ID:     i,
+			Type:   ReduceTask,
+			Status: TaskPending,
+			Worker: -1,
+			Inputs: taskData,
+		}
+		// fmt.Printf("TASK %v\n", i)
+		// for key := range taskData {
+		// 	print(key, " ")
+		// 	for _, v := range taskData[key] {
+		// 		fmt.Printf("%v ", v)
+		// 	}
+		// 	println("\n\n")
+		// }
+	}
 }
 
 func (m *Master) mapTasksCompleted() bool {
