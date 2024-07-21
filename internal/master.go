@@ -89,7 +89,7 @@ func NewMaster(job *Job, config JobConfig) *Master {
 		Config: config,
 		State: JobState{
 			AvailableWorkers:   config.MaxWorkers,
-			PendingMapTasks:    config.MapTasks,
+			PendingMapTasks:    0,
 			PendingReduceTasks: config.ReduceTasks,
 		},
 		Workers:       make([]Worker, config.MaxWorkers),
@@ -122,6 +122,7 @@ func NewMaster(job *Job, config JobConfig) *Master {
 			Input:  chunk,
 		})
 	}
+	master.State.PendingMapTasks = len(master.Tasks)
 
 	for i := 0; i < job.NumReducers; i++ {
 		master.Tasks = append(master.Tasks, Task{
@@ -159,6 +160,7 @@ func (m *Master) assignTasks() {
 				worker.Status = WorkerBusy
 				if task.Type == MapTask {
 					m.State.PendingMapTasks--
+					fmt.Println(m.State.PendingMapTasks)
 				} else {
 					m.State.PendingReduceTasks--
 				}

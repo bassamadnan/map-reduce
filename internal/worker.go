@@ -40,8 +40,9 @@ func Map(_, value string) []KeyValue {
 }
 
 func (w *Worker) WorkerMapTask(task *Task, config JobConfig) TaskResult {
+	fmt.Printf("starting -> worker id: %v, taskid: %v\n", w.ID, task.ID)
 	mappedData := Map("", task.Input)
-
+	fmt.Printf("ending -> worker id: %v, taskid: %v\n", w.ID, task.ID)
 	// add intermediate results to temp directory
 	outputFile := filepath.Join(config.TempDir, fmt.Sprintf("w%d.txt", w.ID))
 	file, err := os.Create(outputFile)
