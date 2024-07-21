@@ -25,9 +25,6 @@ func main() {
 		MaxWorkers:    config.MAX_WORKERS,
 		MaxTasks:      config.MAX_TASKS,
 		WorkerTimeout: config.WORKER_TIMEOUT,
-		MasterPort:    config.MASTER_PORT,
-		MapTasks:      config.MAP_TASKS,
-		ReduceTasks:   config.REDUCE_TASKS,
 		RetryLimit:    config.RETRY_LIMIT,
 		TempDir:       config.TEMP_DIR,
 	}

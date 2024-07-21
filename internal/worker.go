@@ -37,7 +37,7 @@ func Map(_, value string) []KeyValue {
 			Value: strconv.Itoa(count),
 		})
 	}
-	return result
+	return result // emitting
 }
 
 var globalFileCounter int32 = 0 // wX.txt for saving now

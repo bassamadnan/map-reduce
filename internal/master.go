@@ -12,12 +12,12 @@ func NewMaster(job *Job, config JobConfig) *Master {
 		Config: config,
 		State: JobState{
 			AvailableWorkers:   config.MaxWorkers,
-			PendingMapTasks:    0,
-			PendingReduceTasks: config.ReduceTasks,
+			PendingMapTasks:    0, // to be determined
+			PendingReduceTasks: 0, // to be determined
 		},
 		Workers:       make([]Worker, config.MaxWorkers),
 		ResultChannel: make(chan TaskResult, config.MaxWorkers),
-		Tasks:         make([]Task, 0, config.MapTasks+config.ReduceTasks),
+		Tasks:         make([]Task, 0),
 	}
 
 	for i := 0; i < config.MaxWorkers; i++ {
@@ -113,15 +113,18 @@ func (m *Master) RunMapPhase() {
 		select {
 		case result := <-m.ResultChannel:
 			if result.Error != nil {
-				fmt.Printf("task fail --> %v\n", result.TaskID)
+				fmt.Println("error : ", result.Error)
 				m.State.PendingMapTasks++
 			} else {
 				for i := range m.Tasks {
-					if m.Tasks[i].ID == result.TaskID {
-						m.Tasks[i].Status = TaskCompleted
-						m.Tasks[i].EndTime = time.Now()
-						m.Workers[m.Tasks[i].Worker].Status = WorkerIdle // reset worker status to idle
-						fmt.Printf("completed task %v\n", m.Tasks[i].ID)
+					task := &m.Tasks[i]
+					if task.ID == result.TaskID {
+						task.Status = TaskCompleted
+						task.EndTime = time.Now()
+						task.Output = string(result.Result)
+						worker := &m.Workers[task.Worker]
+						worker.Status = WorkerIdle // reset worker status to idle
+						fmt.Printf("result %v-> task %v , worker %v\n", result.Result, task.ID, worker.ID)
 						break
 					}
 				}
@@ -132,10 +135,11 @@ func (m *Master) RunMapPhase() {
 		}
 	}
 
-	// for i, task := range m.Tasks {
-	// 	if task.Status != TaskCompleted {
-	// 		fmt.Printf("task id: %v, i:%v, status:%v\n", task.ID, i, task.Status)
-	// 	}
+	// for _, task := range m.Tasks {
+	// 	fmt.Println(task.ID, task.Output)
+	// }
+	// for _, worker := range m.Workers {
+	// 	fmt.Printf("worker status: -> %v\n", worker.Status)
 	// }
 	fmt.Println("maphase function exit")
 }

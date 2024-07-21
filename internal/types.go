@@ -28,6 +28,7 @@ type Task struct {
 	StartTime time.Time
 	EndTime   time.Time
 	LastPing  time.Time // remove?
+	Output    string
 }
 
 type WorkerStatus int
@@ -35,11 +36,12 @@ type WorkerStatus int
 const (
 	WorkerIdle WorkerStatus = iota
 	WorkerBusy
+	WorkerFailure
 )
 
 type TaskResult struct {
 	TaskID int
-	Result interface{}
+	Result string
 	Error  error
 }
 
