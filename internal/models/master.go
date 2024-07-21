@@ -5,32 +5,52 @@ import (
 	"time"
 )
 
-type MapFunc func(key, value string) []KeyValue
-type ReduceFunc func(key string, values []string) string
+type TaskType int
 
-type KeyValue struct {
-	Key   string
-	Value string
-}
+const (
+	MapTask TaskType = iota
+	ReduceTask
+)
 
-type TaskStatus struct {
+type TaskStatus int
+
+const (
+	TaskPending TaskStatus = iota
+	TaskInProgress
+	TaskCompleted
+	TaskFailed
+)
+
+type Task struct {
+	ID        int
+	Type      TaskType
+	Status    TaskStatus
 	Worker    int
-	Completed bool
+	Input     string              // For MapTask: input chunk, for ReduceTask: empty
+	Inputs    map[string][]string // For ReduceTask: intermediate data, for MapTask: empty
 	StartTime time.Time
 	EndTime   time.Time
 	LastPing  time.Time
 }
 
-type MapTask struct {
-	ID     int
-	Input  string
-	Status TaskStatus
+type WorkerStatus int
+
+const (
+	WorkerIdle WorkerStatus = iota
+	WorkerBusy
+)
+
+type Worker struct {
+	ID            int
+	Status        WorkerStatus
+	TaskChannel   chan *Task
+	ResultChannel chan TaskResult
 }
 
-type ReduceTask struct {
-	ID     int
-	Inputs map[string][]string
-	Status TaskStatus
+type TaskResult struct {
+	TaskID int
+	Result interface{}
+	Error  error
 }
 
 type Job struct {
@@ -57,36 +77,41 @@ type JobConfig struct {
 	MapTasks      int
 	ReduceTasks   int
 	RetryLimit    int
-	TempDir       string // remove ?
+	TempDir       string
 }
 
 type Master struct {
-	Job         *Job
-	Config      JobConfig
-	State       JobState
-	MapTasks    []MapTask
-	ReduceTasks []ReduceTask
-	Workers     []Worker
+	Job           *Job
+	Config        JobConfig
+	State         JobState
+	Tasks         []Task
+	Workers       []Worker
+	ResultChannel chan TaskResult
 }
 
-func SpawnMaster(job *Job, config JobConfig) *Master {
+func NewMaster(job *Job, config JobConfig) *Master {
 	master := &Master{
 		Job:    job,
 		Config: config,
 		State: JobState{
 			AvailableWorkers:   config.MaxWorkers,
-			PendingMapTasks:    0,
+			PendingMapTasks:    config.MapTasks,
 			PendingReduceTasks: config.ReduceTasks,
 		},
-		Workers: make([]Worker, config.MaxWorkers),
+		Workers:       make([]Worker, config.MaxWorkers),
+		Tasks:         make([]Task, 0, config.MapTasks+config.ReduceTasks),
+		ResultChannel: make(chan TaskResult, config.MaxWorkers),
 	}
 
 	for i := 0; i < config.MaxWorkers; i++ {
 		master.Workers[i] = Worker{
-			ID:     i,
-			Status: int(WorkerIdle),
+			ID:            i,
+			Status:        WorkerIdle,
+			TaskChannel:   make(chan *Task),
+			ResultChannel: master.ResultChannel,
 		}
 	}
+
 	content, err := utils.ReadInput(job.InputFile)
 	if err != nil {
 		return nil
@@ -94,45 +119,53 @@ func SpawnMaster(job *Job, config JobConfig) *Master {
 	chunks := utils.SplitInput(content)
 
 	for i, chunk := range chunks {
-		master.MapTasks = append(master.MapTasks, MapTask{
-			ID:    i,
-			Input: chunk,
-			Status: TaskStatus{
-				Worker:    -1,
-				Completed: false,
-			},
+		master.Tasks = append(master.Tasks, Task{
+			ID:     i,
+			Type:   MapTask,
+			Status: TaskPending,
+			Worker: -1,
+			Input:  chunk,
 		})
 	}
-	master.State.PendingMapTasks = len(master.MapTasks)
 
 	for i := 0; i < job.NumReducers; i++ {
-		master.ReduceTasks = append(master.ReduceTasks, ReduceTask{
-			ID: i,
-			Status: TaskStatus{
-				Worker:    -1,
-				Completed: false,
-			},
+		master.Tasks = append(master.Tasks, Task{
+			ID:     len(chunks) + i,
+			Type:   ReduceTask,
+			Status: TaskPending,
+			Worker: -1,
 		})
 	}
 
 	return master
 }
 
-func (m *Master) AssignTask() *Task {
-	// check for map tasks first
-	for i := range m.MapTasks {
-		if !(m.MapTasks[i].Status.Completed) {
-			var task Task = &m.MapTasks[i]
-			return &task
-		}
-	}
-	// if all map tasks are done (add another check later)
-	// check reduce ReduceTasks
-	for i := range m.ReduceTasks {
-		if !(m.ReduceTasks[i].Status.Completed) {
-			var task Task = &m.ReduceTasks[i]
-			return &task
+func (m *Master) getNextTask() *Task {
+	for i := range m.Tasks {
+		if m.Tasks[i].Status == TaskPending {
+			return &m.Tasks[i]
 		}
 	}
 	return nil
+}
+
+func (m *Master) assignTasks() {
+	for i := range m.Workers {
+		worker := &m.Workers[i]
+		if worker.Status == WorkerIdle {
+			task := m.getNextTask()
+			if task != nil {
+				task.Status = TaskInProgress
+				task.Worker = worker.ID
+				task.StartTime = time.Now()
+				worker.TaskChannel <- task
+				worker.Status = WorkerBusy
+				if task.Type == MapTask {
+					m.State.PendingMapTasks--
+				} else {
+					m.State.PendingReduceTasks--
+				}
+			}
+		}
+	}
 }
