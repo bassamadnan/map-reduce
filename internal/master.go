@@ -217,7 +217,7 @@ func (m *Master) RunReducePhase() {
 
 	// 1. start Workers
 	// 2. assign Tasks
-	// 3. collect results (intermediate, to be passed to reduce phase)
+	// 3. wait for completion
 
 	m.StartWorkers()
 	for !m.allReduceTasksCompleted() {

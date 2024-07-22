@@ -26,7 +26,6 @@ func DeserializeKeyValue(line string) (KeyValue, error) {
 		value, err = strconv.Atoi(valueStr)
 	case "string":
 		value = valueStr
-	// Add more types as needed
 	default:
 		err = fmt.Errorf("unsupported value type: %s", valueType)
 	}

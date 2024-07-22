@@ -7,16 +7,8 @@ import (
 )
 
 func main() {
-
-	// master := models.NewMaster(job *models.Job, config models.JobConfig)
-	// for worker in master.workers:
-	// 	go workerRoutine(worker)
-
-	// while master.maptasks > 0: assign tasks and collect results
 	job := &internal.Job{
-		MapFunc:     internal.Map,
 		InputFile:   "data/input/random_letters.txt",
-		OutputFile:  "data/output/result.txt",
 		NumMappers:  0,
 		NumReducers: 0,
 	}
