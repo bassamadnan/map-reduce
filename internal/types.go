@@ -23,8 +23,8 @@ type Task struct {
 	Type      TaskType
 	Status    TaskStatus
 	Worker    int
-	Input     string           // For MapTask: input chunk, for ReduceTask: empty
-	Inputs    map[string][]int // For ReduceTask: intermediate data, for MapTask: empty
+	Input     string              // For MapTask: input chunk, for ReduceTask: empty
+	Inputs    map[string][]string // For ReduceTask: intermediate data, for MapTask: empty
 	StartTime time.Time
 	EndTime   time.Time
 	LastPing  time.Time // remove?
@@ -70,6 +70,7 @@ type JobConfig struct {
 	ReduceTasks   int
 	RetryLimit    int
 	TempDir       string
+	OutDir        string
 }
 
 type Master struct {

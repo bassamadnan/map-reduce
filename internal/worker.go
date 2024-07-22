@@ -82,6 +82,7 @@ func (w *Worker) Run(config JobConfig) {
 			result = w.WorkerMapTask(task, config)
 		} else {
 			// TODO : reduce task
+			result = w.WorkerReduceTask(task, config)
 
 		}
 		w.ResultChannel <- result

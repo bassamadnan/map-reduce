@@ -27,6 +27,7 @@ func main() {
 		WorkerTimeout: config.WORKER_TIMEOUT,
 		RetryLimit:    config.RETRY_LIMIT,
 		TempDir:       config.TEMP_DIR,
+		OutDir:        config.OUTPUT_DIR,
 	}
 
 	job.NumMappers = jobConfig.MapTasks
@@ -39,5 +40,6 @@ func main() {
 	}
 	master.RunMapPhase()
 	fmt.Println("map phase completed.")
+	master.RunReducePhase()
 
 }

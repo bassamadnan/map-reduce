@@ -37,9 +37,9 @@ func DeserializeKeyValue(line string) (KeyValue, error) {
 
 	return KeyValue{Key: key, Value: value}, nil
 }
-func (m *Master) mergeFiles() (map[string][]int, error) {
+func (m *Master) mergeFiles() (map[string][]string, error) {
 	fmt.Println("starting merging ..")
-	aggregateData := make(map[string][]int) // make type agnostic TODO
+	aggregateData := make(map[string][]string) // make type agnostic TODO
 	for _, task := range m.Tasks {
 		outputFile := task.Output
 		file, err := os.Open(outputFile)
@@ -53,11 +53,8 @@ func (m *Master) mergeFiles() (map[string][]int, error) {
 			if err != nil {
 				return nil, fmt.Errorf("Error scanning file for task %v-> %v", task.ID, task.Output)
 			}
-			val, ok := kv.Value.(int) // make agnostic TODO
-			if !ok {
-				return nil, fmt.Errorf("Error value expected int got %T", kv.Value)
 
-			}
+			val := fmt.Sprintf("%v", kv.Value)
 			aggregateData[kv.Key] = append(aggregateData[kv.Key], val)
 		}
 	}

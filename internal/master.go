@@ -152,7 +152,7 @@ func (m *Master) RunMapPhase() {
 
 }
 
-func (m *Master) createReduceTasks(aggregateData map[string][]int) {
+func (m *Master) createReduceTasks(aggregateData map[string][]string) {
 	keys := make([]string, 0, len(aggregateData))
 	for k := range aggregateData {
 		keys = append(keys, k)
@@ -165,7 +165,7 @@ func (m *Master) createReduceTasks(aggregateData map[string][]int) {
 		start := i * taskLimit
 		end := min(len(keys), (i+1)*taskLimit)
 		taskKeys := keys[start:end]
-		taskData := make(map[string][]int)
+		taskData := make(map[string][]string)
 		for _, key := range taskKeys {
 			taskData[key] = aggregateData[key]
 		}
@@ -203,4 +203,48 @@ func (m *Master) allMapTasksCompleted() bool {
 		}
 	}
 	return true
+}
+
+func (m *Master) allReduceTasksCompleted() bool {
+	for _, task := range m.Tasks {
+		if task.Type == ReduceTask && task.Status != TaskCompleted {
+			return false
+		}
+	}
+	return true
+}
+func (m *Master) RunReducePhase() {
+
+	// 1. start Workers
+	// 2. assign Tasks
+	// 3. collect results (intermediate, to be passed to reduce phase)
+
+	m.StartWorkers()
+	for !m.allReduceTasksCompleted() {
+		m.assignTasks()
+		select {
+		case result := <-m.ResultChannel:
+			if result.Error != nil {
+				fmt.Println("error : ", result.Error)
+				m.State.PendingMapTasks++
+			} else {
+				for i := range m.Tasks {
+					task := &m.Tasks[i]
+					if task.ID == result.TaskID && task.Type == ReduceTask {
+						task.Status = TaskCompleted
+						task.EndTime = time.Now()
+						task.Output = string(result.Result)
+						worker := &m.Workers[task.Worker]
+						worker.Status = WorkerIdle // reset worker status to idle
+						fmt.Printf("result %v-> task %v , worker %v\n", result.Result, task.ID, worker.ID)
+						break
+					}
+				}
+			}
+		case <-time.After(10000 * time.Millisecond): // timeout
+			fmt.Println("Time out")
+
+		}
+	}
+	println("reduce phase complete")
 }
