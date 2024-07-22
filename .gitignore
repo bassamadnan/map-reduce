@@ -21,3 +21,4 @@ mapreduce
 # vendor/
 *.txt
 *.py
+!data/input/random_letters.txt
