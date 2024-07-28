@@ -2,6 +2,21 @@ package internal
 
 import "time"
 
+type MapFunc func(key, value string) []KeyValue          // map (k1,v1) → list(k2,v2)
+type ReduceFunc func(key string, values []string) string // reduce (k2,list(v2)) → list(v2)
+
+type KeyValue struct {
+	Key   string
+	Value interface{}
+}
+
+type Worker struct {
+	ID            int
+	Status        WorkerStatus
+	TaskChannel   chan *Task
+	ResultChannel chan TaskResult
+}
+
 type TaskType int
 
 const (
@@ -46,12 +61,10 @@ type TaskResult struct {
 }
 
 type Job struct {
-	MapFunc     MapFunc
-	ReduceFunc  ReduceFunc
-	InputFile   string
-	OutputFile  string
-	NumMappers  int
-	NumReducers int
+	MapFunc    MapFunc
+	ReduceFunc ReduceFunc
+	InputFile  string
+	OutputFile string
 }
 
 type JobState struct {
